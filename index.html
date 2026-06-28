@@ -1,0 +1,532 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bi-Prop Calculator</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="background-animation"></div>
+    
+    <div class="container">
+        <header>
+            <h1>Bi-Prop Combustion Calculator</h1>
+            <p>Liquid-Liquid Hypergolic Combustion of HTP and Additive-Enriched Hydrocarbon Fuel</p>
+        </header>
+
+        <nav class="tabs">
+            <button class="tab-btn active" onclick="switchTab(event, 'stability')">Combustion Stability</button>
+            <button class="tab-btn" onclick="switchTab(event, 'sizing')">Engine Sizing & Cooling</button>
+        </nav>
+
+        <!-- STABILITY TAB -->
+        <main id="tab-stability" class="tab-content active">
+            <!-- Presets Section -->
+            <div class="panel glass presets-panel">
+                <h2><span class="icon">🚀</span> Configuration Presets</h2>
+                <div class="preset-buttons">
+                    <button id="btn-preset-jp8" class="btn-secondary">Baseline: JP-8 + HTP 90%</button>
+                    <button id="btn-preset-engine" class="btn-secondary">Research Engine: 500N Orbital Thruster</button>
+                    <button id="btn-preset-unstable" class="btn-secondary" style="border-color: var(--danger); color: var(--danger);">Danger: Unstable Resonance</button>
+                </div>
+                <div id="preset-desc" class="preset-desc hidden"></div>
+            </div>
+
+            <div class="grid-layout">
+                <!-- Inputs Section -->
+                <div class="panel glass">
+                    <h2><span class="icon">⚙️</span> Input Parameters</h2>
+                    
+                    <form id="calc-form">
+                        <div class="section-title">Chemical Induction (\(\tau_{id}\))</div>
+                        <div class="input-group">
+                            <div class="input-field">
+                                <label for="A">Pre-exponential (A) [s⁻¹]</label>
+                                <input type="number" id="A" value="5e-10" step="any" required>
+                            </div>
+                            <div class="input-field">
+                                <label for="C">Additive Conc. (C) [wt%]</label>
+                                <input type="number" id="C" value="5" step="any" required>
+                            </div>
+                            <div class="input-field">
+                                <label for="m">Conc. Exp (m) [-]</label>
+                                <input type="number" id="m" value="1.0" step="any" required>
+                            </div>
+                            <div class="input-field">
+                                <label for="Pc">Chamber Pres. (Pc) [bar]</label>
+                                <input type="number" id="Pc" value="15" step="any" required>
+                            </div>
+                            <div class="input-field">
+                                <label for="k">Pres. Exp (k) [-]</label>
+                                <input type="number" id="k" value="1.0" step="any" required>
+                            </div>
+                            <div class="input-field">
+                                <label for="E_a">Activation Energy (Ea) [J/mol]</label>
+                                <input type="number" id="E_a" value="45000" step="any" required>
+                            </div>
+                            <div class="input-field">
+                                <label for="R">Gas Constant (R) [J/(mol·K)]</label>
+                                <input type="number" id="R" value="8.314" step="any" required>
+                            </div>
+                            <div class="input-field">
+                                <label for="T">Liquid Temp (T) [K]</label>
+                                <input type="number" id="T" value="300" step="any" required>
+                            </div>
+                        </div>
+
+                        <div class="section-title">Vaporization (\(\tau_{vap}\))</div>
+                        <div class="input-group">
+                            <div class="input-field">
+                                <label for="SMD">Droplet Diameter (SMD) [m]</label>
+                                <input type="number" id="SMD" value="0.0005" step="any" required>
+                            </div>
+                            <div class="input-field">
+                                <label for="K_evap">Evap. Constant (K) [m²/(s·bar^q)]</label>
+                                <input type="number" id="K_evap" value="0.08" step="any" required>
+                            </div>
+                            <div class="input-field">
+                                <label for="q">Pres. Exp for Evap (q) [-]</label>
+                                <input type="number" id="q" value="0.5" step="any" required>
+                            </div>
+                        </div>
+
+                        <div class="section-title">Acoustic Resonance</div>
+                        <div class="input-group">
+                            <div class="input-field">
+                                <label for="c">Speed of Sound (c) [m/s]</label>
+                                <input type="number" id="c" value="1100" step="any" required>
+                            </div>
+                            <div class="input-field">
+                                <label for="D">Chamber Diameter (D) [m]</label>
+                                <input type="number" id="D" value="0.05" step="any" required>
+                            </div>
+                        </div>
+
+                        <button type="submit" class="btn-primary">Calculate Parameters</button>
+                    </form>
+                </div>
+
+                <!-- Outputs Section -->
+                <div class="panel glass output-panel">
+                    <h2><span class="icon">📊</span> Calculation Results</h2>
+                    
+                    <div class="result-card">
+                        <div class="result-label">Chemical Induction (\(\tau_{id}\))</div>
+                        <div class="result-value" id="res-tau-id">-- ms</div>
+                    </div>
+                    
+                    <div class="result-card">
+                        <div class="result-label">Vaporization Delay (\(\tau_{vap}\))</div>
+                        <div class="result-value" id="res-tau-vap">-- ms</div>
+                    </div>
+
+                    <div class="result-card highlight">
+                        <div class="result-label">Total Time Lag (\(\tau\))</div>
+                        <div class="result-value" id="res-tau-total">-- ms</div>
+                    </div>
+
+                    <div class="result-card">
+                        <div class="result-label">First Tangential Mode (1T)</div>
+                        <div class="result-value" id="res-f1t">-- Hz</div>
+                    </div>
+
+                    <div class="result-card">
+                        <div class="result-label">Acoustic Period (\(T_{acoust}\))</div>
+                        <div class="result-value" id="res-tacoust">-- ms</div>
+                    </div>
+
+                    <div id="stability-alert" class="alert hidden">
+                        <div class="alert-icon">⚠️</div>
+                        <div class="alert-content">
+                            <strong>Instability Warning (Hard Start)</strong>
+                            <p>The Total Time Lag (\(\tau\)) is critically close to the Acoustic Period. High risk of thermo-acoustic resonance (screaming).</p>
+                        </div>
+                    </div>
+                    
+                    <div id="stability-ok" class="alert success hidden">
+                        <div class="alert-icon">✅</div>
+                        <div class="alert-content">
+                            <strong>Stable Operation</strong>
+                            <p>The time lag does not sync with the primary acoustic mode of the chamber.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="panel glass theory-panel">
+                <h2><span class="icon">📚</span> Equations & Theory</h2>
+                <div class="theory-grid">
+                    <div class="theory-card">
+                        <h3>1. Chemical Induction (\(\tau_{id}\))</h3>
+                        <p class="formula">$$ \tau_{id} = A \cdot \frac{1}{C^m \cdot P_c^k} \cdot e^{\frac{E_a}{R \cdot T}} $$</p>
+                        <p class="desc">The delay from initial liquid contact until reaction onset. Depends inversely on additive concentration (C) and chamber pressure (Pc). Rising temperature decreases the delay exponentially via the activation energy (Ea).</p>
+                    </div>
+
+                    <div class="theory-card">
+                        <h3>2. Vaporization Delay (\(\tau_{vap}\))</h3>
+                        <p class="formula">$$ \tau_{vap} = \frac{SMD^2}{K_{evap} \cdot P_c^q} $$</p>
+                        <p class="desc">Based on the \(D^2\)-law of droplet evaporation. The time required for atomized droplets (Sauter Mean Diameter) to vaporize prior to combustion. Finer droplets quadratically reduce this time.</p>
+                    </div>
+
+                    <div class="theory-card">
+                        <h3>3. Total Time Lag (\(\tau\))</h3>
+                        <p class="formula">$$ \tau = \tau_{id} + \tau_{vap} $$</p>
+                        <p class="desc">Crocco's time lag model. The total interval from propellant injection into the chamber until bulk heat release.</p>
+                    </div>
+
+                    <div class="theory-card">
+                        <h3>4. Acoustic Resonance (\(1T\))</h3>
+                        <p class="formula">$$ f_{1T} = \frac{1.841 \cdot c}{\pi \cdot D} $$</p>
+                        <p class="desc">The First Tangential acoustic resonance mode. Destructive instability (Screaming) occurs when the time lag (\(\tau\)) synchronizes with the acoustic wave period: \(\tau \approx \frac{1}{2 \cdot f_{1T}}\).</p>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- ENGINE SIZING TAB -->
+        <main id="tab-sizing" class="tab-content" style="display: none;">
+            <div class="grid-layout">
+                <!-- Inputs Section -->
+                <div class="panel glass">
+                    <h2><span class="icon">📐</span> Engine Parameters</h2>
+                    <form id="sizing-form">
+                        <div class="section-title">Technological Base</div>
+                        <div class="input-group">
+                            <div class="input-field" style="grid-column: span 2;">
+                                <label for="propellant_type">Propellant Combination</label>
+                                <select id="propellant_type" style="padding: 0.75rem; border-radius: 0.5rem; background: rgba(0,0,0,0.2); color: white; border: 1px solid var(--panel-border);">
+                                    <option value="htp_jp8">HTP 90% + JP-8 (Hypergolic)</option>
+                                </select>
+                            </div>
+                            <div class="input-field">
+                                <label for="req_thrust">Target Thrust (F) [N]</label>
+                                <input type="number" id="req_thrust" value="1000" step="10" required>
+                            </div>
+                            <div class="input-field">
+                                <label for="size_Pc">Chamber Pressure (Pc) [bar]</label>
+                                <input type="number" id="size_Pc" value="15" step="0.5" required>
+                            </div>
+                            <div class="input-field">
+                                <label for="size_Pa">Ambient Pressure (Pa) [bar]</label>
+                                <input type="number" id="size_Pa" value="1.013" step="any" required title="Use 0 for vacuum, 1.013 for Sea Level">
+                            </div>
+                            <div class="input-field">
+                                <label for="size_OF">Mixture Ratio (O/F) [-]</label>
+                                <input type="number" id="size_OF" value="5.5" step="0.1" required>
+                            </div>
+                            <div class="input-field">
+                                <label for="size_Lstar">Desired L* [m]</label>
+                                <input type="number" id="size_Lstar" value="1.1" step="0.1" required>
+                            </div>
+                            <div class="input-field">
+                                <label for="size_CR">Desired Contraction Ratio (CR) [-]</label>
+                                <input type="number" id="size_CR" value="4.0" step="0.1" required>
+                            </div>
+                            <div class="input-field">
+                                <label for="max_D">Max Diameter [cm] (Opt)</label>
+                                <input type="number" id="max_D" step="any" placeholder="None">
+                            </div>
+                            <div class="input-field">
+                                <label for="max_L">Max Length [cm] (Opt)</label>
+                                <input type="number" id="max_L" step="any" placeholder="None">
+                            </div>
+                        </div>
+
+                        <div class="section-title">Structural & Cooling Auto-Sizing</div>
+                        <div class="input-group">
+                            <div class="input-field" style="grid-column: span 2;">
+                                <label for="material_preset">Chamber Material</label>
+                                <select id="material_preset" style="padding: 0.75rem; border-radius: 0.5rem; background: rgba(0,0,0,0.2); color: white; border: 1px solid var(--panel-border);">
+                                    <option value="copper">Copper Alloy (High Conductivity)</option>
+                                    <option value="ss">Stainless Steel (פלב"מ)</option>
+                                    <option value="inconel">Inconel 718 (High Temp / Low Cond)</option>
+                                    <option value="custom">Custom</option>
+                                </select>
+                            </div>
+                            <div class="input-field">
+                                <label for="allow_stress">Allowable Stress [MPa]</label>
+                                <input type="number" id="allow_stress" value="150" step="10" required title="For Wall Thickness Calc">
+                            </div>
+                            <div class="input-field">
+                                <label for="kw">Thermal Cond. (\(k_w\)) [W/mK]</label>
+                                <input type="number" id="kw" value="350" step="1" required>
+                                <div style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.35rem; line-height: 1.3;">
+                                    <strong>Ref Values:</strong><br>
+                                    • Copper: ~350<br>
+                                    • Stainless Steel: ~16<br>
+                                    • Inconel: ~15
+                                </div>
+                            </div>
+                            <div class="input-field">
+                                <label for="rib_thick">Rib Thickness [mm]</label>
+                                <input type="number" id="rib_thick" value="1.0" step="0.1" required>
+                            </div>
+                            <div class="input-field">
+                                <label for="Tc">Combustion Temp (\(T_c\)) [K]</label>
+                                <input type="number" id="Tc" value="2800" step="50" required>
+                            </div>
+                            <div class="input-field">
+                                <label for="size_Pf">Feed Pressure (Pf) [bar]</label>
+                                <input type="number" id="size_Pf" value="20" step="0.5" required>
+                            </div>
+                        </div>
+
+                        <button type="submit" class="btn-primary">Generate Design</button>
+                    </form>
+                    
+                    <hr style="margin: 2rem 0; border: 0; border-top: 1px solid var(--panel-border);">
+
+                    <h2><span class="icon">🧪</span> Experimental Data (Overrides)</h2>
+                    <p style="font-size: 0.9rem; color: var(--text-secondary); margin-bottom: 1rem;">
+                        Input empirical efficiencies to improve calculation accuracy. This data is saved locally in your browser.
+                    </p>
+                    <div class="input-group">
+                        <div class="input-field">
+                            <label for="exp_cstar_eff">c* Efficiency (\(\eta_{c^*}\))</label>
+                            <input type="number" id="exp_cstar_eff" value="0.95" step="0.01" min="0.5" max="1.0">
+                        </div>
+                        <div class="input-field">
+                            <label for="exp_cf_eff">Thrust Coeff. Eff (\(\eta_{C_f}\))</label>
+                            <input type="number" id="exp_cf_eff" value="0.98" step="0.01" min="0.5" max="1.0">
+                        </div>
+                    </div>
+                    <div style="display: flex; gap: 1rem; margin-top: 1rem;">
+                        <button type="button" class="btn-secondary" id="btn-save-exp" style="flex: 1;">Save Exp Data</button>
+                        <button type="button" class="btn-secondary" id="btn-clear-exp" style="flex: 1;">Clear Exp Data</button>
+                    </div>
+                    <div id="exp-save-msg" style="color: var(--success); font-size: 0.85rem; margin-top: 0.5rem; display: none;">Data saved to LocalStorage!</div>
+                </div>
+
+                <!-- Outputs Section -->
+                <div class="panel glass output-panel">
+                    <h2><span class="icon">📐</span> Engine Sketch</h2>
+                    <!-- Dynamic SVG Canvas -->
+                    <div style="background: rgba(0,0,0,0.3); border-radius: 0.5rem; padding: 1rem; text-align: center; overflow: hidden; margin-bottom: 1rem;">
+                        <svg id="engine-svg" width="100%" height="250" viewBox="0 0 500 200" style="max-width: 100%;">
+                            <!-- Initial placeholder drawing -->
+                            <text x="250" y="100" fill="var(--text-secondary)" text-anchor="middle" font-family="Outfit">Click "Generate Design" to render sketch</text>
+                        </svg>
+                    </div>
+
+                    <h2><span class="icon">📊</span> Dimensions & Specifications</h2>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                        <!-- Dimension Cards -->
+                        <div class="result-card">
+                            <div class="result-label">Total Mass Flow (\(\dot{m}\))</div>
+                            <div class="result-value" id="res-mdot">-- kg/s</div>
+                        </div>
+                        <div class="result-card">
+                            <div class="result-label">Specific Impulse (\(I_{sp}\))</div>
+                            <div class="result-value" id="res-isp">-- s</div>
+                        </div>
+                        <div class="result-card">
+                            <div class="result-label">Chamber Dia (\(D_c\))</div>
+                            <div class="result-value" id="res-dc">-- cm</div>
+                        </div>
+                        <div class="result-card highlight">
+                            <div class="result-label">Throat Dia (\(D_t\))</div>
+                            <div class="result-value" id="res-dt">-- cm</div>
+                        </div>
+                        <div class="result-card">
+                            <div class="result-label">Exit Dia (\(D_e\))</div>
+                            <div class="result-value" id="res-de">-- cm</div>
+                        </div>
+                        <div class="result-card">
+                            <div class="result-label">Chamber Length (\(L_c\))</div>
+                            <div class="result-value" id="res-lc">-- cm</div>
+                        </div>
+                        <div class="result-card">
+                            <div class="result-label">Actual Exp Ratio (\(\epsilon\))</div>
+                            <div class="result-value" id="res-eps">--</div>
+                        </div>
+                        <div class="result-card">
+                            <div class="result-label">Actual Contraction Ratio</div>
+                            <div class="result-value" id="res-actual-cr">--</div>
+                        </div>
+                        <div class="result-card">
+                            <div class="result-label">Actual L*</div>
+                            <div class="result-value" id="res-actual-lstar">-- m</div>
+                        </div>
+                        <div class="result-card">
+                            <div class="result-label">Total Injector Area</div>
+                            <div class="result-value" id="res-ainj">-- mm²</div>
+                        </div>
+                    </div>
+                    
+                    <div id="constraint-alert" class="alert hidden">
+                        <div class="alert-icon">ℹ️</div>
+                        <div class="alert-content">
+                            <strong>Constraints Applied</strong>
+                            <p id="constraint-msg">CR or L* were overridden to satisfy geometric limits.</p>
+                        </div>
+                    </div>
+                    
+                    <h3 style="margin-top: 1.5rem; margin-bottom: 0.5rem; font-size: 1.1rem; color: var(--accent-color);">Automated Regenerative Cooling (HTP)</h3>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                        <div class="result-card highlight" style="grid-column: span 2;">
+                            <div class="result-label">Optimal Wall Thickness (\(t_w\))</div>
+                            <div class="result-value" id="res-tw">-- mm</div>
+                        </div>
+                        <div class="result-card">
+                            <div class="result-label">Pressure Stress</div>
+                            <div class="result-value" id="res-sig-p">-- MPa</div>
+                        </div>
+                        <div class="result-card">
+                            <div class="result-label">Thermal Stress</div>
+                            <div class="result-value" id="res-sig-th">-- MPa</div>
+                        </div>
+                        <div class="result-card highlight" style="grid-column: span 2; border-color: rgba(255,255,255,0.2);">
+                            <div class="result-label">Total Combined Stress (Must be < Allowable)</div>
+                            <div class="result-value" id="res-sig-tot">-- MPa</div>
+                        </div>
+                        
+                        <div id="stress-alert" class="alert hidden" style="grid-column: span 2; margin-top: 0; margin-bottom: 0.5rem;">
+                            <div class="alert-icon">💥</div>
+                            <div class="alert-content">
+                                <strong>Structural Failure Danger</strong>
+                                <p id="stress-msg">Total stress exceeds allowable limits for any wall thickness!</p>
+                            </div>
+                        </div>
+
+                        <div class="result-card">
+                            <div class="result-label">Number of Channels</div>
+                            <div class="result-value" id="res-nchan">--</div>
+                        </div>
+                        <div class="result-card">
+                            <div class="result-label">Velocity at Throat</div>
+                            <div class="result-value" id="res-vt">-- m/s</div>
+                        </div>
+                        <div class="result-card">
+                            <div class="result-label">Velocity at Chamber</div>
+                            <div class="result-value" id="res-vc">-- m/s</div>
+                        </div>
+                        <div class="result-card">
+                            <div class="result-label">Channel Height (Const)</div>
+                            <div class="result-value" id="res-h">-- mm</div>
+                        </div>
+                    </div>
+
+                    <h3 style="margin-top: 1.5rem; margin-bottom: 0.5rem; font-size: 1.1rem; color: var(--danger);">Thermal Analysis (at Throat)</h3>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                        <div class="result-card highlight" style="grid-column: span 2;">
+                            <div class="result-label">Max Heat Flux (\(q\))</div>
+                            <div class="result-value" id="res-q">-- MW/m²</div>
+                        </div>
+                        <div class="result-card">
+                            <div class="result-label">Gas-Side Wall Temp (\(T_{wg}\))</div>
+                            <div class="result-value" id="res-twg">-- K</div>
+                        </div>
+                        <div class="result-card">
+                            <div class="result-label">Liquid-Side Wall Temp (\(T_{wc}\))</div>
+                            <div class="result-value" id="res-twc">-- K</div>
+                        </div>
+                    </div>
+                    
+                    <div id="thermal-alert-hot" class="alert hidden" style="margin-top: 0.5rem;">
+                        <div class="alert-icon">🔥</div>
+                        <div class="alert-content">
+                            <strong>Wall Melting Danger</strong>
+                            <p id="thermal-msg-hot">The gas-side wall temperature exceeds the safe limit for the material.</p>
+                            <ul id="thermal-rec-hot" style="margin-top: 0.5rem; padding-left: 1.5rem; font-size: 0.85rem; color: rgba(255,255,255,0.8);"></ul>
+                        </div>
+                    </div>
+                    <div id="thermal-alert-boil" class="alert hidden" style="margin-top: 0.5rem;">
+                        <div class="alert-icon">🫧</div>
+                        <div class="alert-content">
+                            <strong>Coolant Boiling Danger</strong>
+                            <p id="thermal-msg-boil">The liquid-side wall temperature exceeds the safe boiling/decomposition limit for HTP.</p>
+                            <ul id="thermal-rec-boil" style="margin-top: 0.5rem; padding-left: 1.5rem; font-size: 0.85rem; color: rgba(255,255,255,0.8);"></ul>
+                        </div>
+                    </div>
+                    
+                    <h3 style="margin-top: 1.5rem; margin-bottom: 0.5rem; font-size: 1.1rem; color: var(--accent-color);">Mass Optimization (Optimal CR)</h3>
+                    <div style="background: rgba(0,0,0,0.3); border-radius: 0.5rem; padding: 1rem; text-align: center;">
+                        <div style="position: relative; height: 250px; width: 100%;">
+                            <canvas id="massChart"></canvas>
+                        </div>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 1rem;">
+                            <div class="result-card highlight">
+                                <div class="result-label">Suggested Optimal CR</div>
+                                <div class="result-value" id="res-opt-cr" style="color: #4ade80;">--</div>
+                            </div>
+                            <div class="result-card highlight">
+                                <div class="result-label">Minimum Engine Mass</div>
+                                <div class="result-value" id="res-opt-mass" style="color: #4ade80;">-- kg</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Cooling Cross Section SVG Canvas -->
+                    <div style="background: rgba(0,0,0,0.3); border-radius: 0.5rem; padding: 1rem; text-align: center; overflow: hidden; margin-top: 1rem;">
+                        <h4 style="color: var(--text-secondary); margin-bottom: 0.5rem; font-weight: normal; font-size: 0.9rem;">Cooling Channel Cross-Section (Chamber vs Throat)</h4>
+                        <svg id="cooling-svg" width="100%" height="200" viewBox="0 0 500 200" style="max-width: 100%;">
+                            <text x="250" y="100" fill="var(--text-secondary)" text-anchor="middle" font-family="Outfit">Waiting for Design Generation</text>
+                        </svg>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="panel glass theory-panel" style="margin-top: 2rem;">
+                <h2><span class="icon">📚</span> Engine Sizing & Cooling Equations</h2>
+                <div class="theory-grid">
+                    <div class="theory-card">
+                        <h3>1. Mass Flow (\(\dot{m}\))</h3>
+                        <p class="formula">$$ \dot{m} = \frac{F}{I_{sp} \cdot g_0} $$</p>
+                        <p class="desc">The total mass flow rate required to achieve the target Thrust (\(F\)). Derived from the specific impulse (\(I_{sp}\)). It is split into oxidizer and fuel based on the O/F ratio.</p>
+                    </div>
+
+                    <div class="theory-card">
+                        <h3>2. Throat Area (\(A_t\))</h3>
+                        <p class="formula">$$ A_t = \frac{\dot{m} \cdot c^*}{P_c} $$</p>
+                        <p class="desc">The most critical dimension of the engine (choke point). Depends on the mass flow, chamber pressure (\(P_c\)), and characteristic velocity (\(c^*\)) of the propellants.</p>
+                    </div>
+
+                    <div class="theory-card">
+                        <h3>3. Chamber Dimensions (\(L_c\), \(A_c\))</h3>
+                        <p class="formula">$$ A_c = CR \cdot A_t \quad | \quad L_c = \frac{L^*}{CR} $$</p>
+                        <p class="desc">The chamber area is scaled from the throat area using the Contraction Ratio (\(CR\)). The physical length (\(L_c\)) is derived from the Characteristic Length (\(L^*\)), assuming a cylindrical volume.</p>
+                    </div>
+
+                    <div class="theory-card">
+                        <h3>4. Wall Thickness (\(t_w\))</h3>
+                        <p class="formula">$$ t_w = \frac{P_c \cdot D_c}{2 \cdot \sigma_{allow}} $$</p>
+                        <p class="desc">Thin-wall pressure vessel hoop stress. Determines the thickness of the inner hot-wall based on the material's allowable stress (\(\sigma_{allow}\)) and the internal pressure.</p>
+                    </div>
+                    
+                    <div class="theory-card">
+                        <h3>5. Cooling Channels (\(N\), \(w_t\))</h3>
+                        <p class="formula">$$ N = \lfloor \frac{\pi \cdot D_t}{w_{min} + t_{rib}} \rfloor $$</p>
+                        <p class="desc">Calculates the maximum number of channels (\(N\)) that can physically fit around the throat perimeter while maintaining a minimum channel width (\(w_{min} = 1.5mm\)) and the specified rib thickness.</p>
+                    </div>
+
+                    <div class="theory-card">
+                        <h3>6. Hot Gas Heat Transfer (Bartz)</h3>
+                        <p class="formula">$$ h_g \propto \frac{1}{D_t^{0.2}} \cdot \left(\frac{P_c}{c^*}\right)^{0.8} $$</p>
+                        <p class="desc">The Bartz equation estimates the convective heat transfer coefficient (\(h_g\)) of the hot combustion gas. It is highest at the throat due to extreme velocity and mass flux.</p>
+                    </div>
+
+                    <div class="theory-card">
+                        <h3>7. Coolant Heat Transfer (Dittus-Boelter)</h3>
+                        <p class="formula">$$ Nu = 0.023 \cdot Re^{0.8} \cdot Pr^{0.4} $$</p>
+                        <p class="desc">Calculates the convective heat transfer coefficient (\(h_c\)) of the liquid coolant inside the channels based on the flow velocity (Reynolds number).</p>
+                    </div>
+
+                    <div class="theory-card">
+                        <h3>8. Steady-State Heat Flux (\(q\))</h3>
+                        <p class="formula">$$ q = \frac{T_{c} - T_{co}}{\frac{1}{h_g} + \frac{t_w}{k_w} + \frac{1}{h_c}} $$</p>
+                        <p class="desc">The 1D thermal resistance network. Balances the heat flowing from the gas (\(T_c\)), through the metal wall (\(k_w/t_w\)), and into the liquid coolant (\(T_{co}\)).</p>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- MathJax for rendering math formulas -->
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <!-- Chart.js for Mass Optimization Graph -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>
