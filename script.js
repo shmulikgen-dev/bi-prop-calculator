@@ -145,6 +145,16 @@ function calculateSizing() {
     const k_w = parseFloat(document.getElementById('kw').value);
     const Tc = parseFloat(document.getElementById('Tc').value);
     
+    const user_chf_limit = parseFloat(document.getElementById('user_chf').value) * 1e6 || 20e6;
+    const user_wt_val = document.getElementById('user_wt').value;
+    const user_h_val = document.getElementById('user_h').value;
+    const custom_wt = user_wt_val ? parseFloat(user_wt_val) : null;
+    const custom_h = user_h_val ? parseFloat(user_h_val) : null;
+    
+    const inj_porosity = parseFloat(document.getElementById('inj_porosity').value) / 100 || 0.1;
+    const inj_D_user_val = document.getElementById('inj_D_user').value;
+    const custom_inj_D = inj_D_user_val ? parseFloat(inj_D_user_val) / 100 : null; // cm to m
+    
     // Infer advanced material properties based on dropdown for thermal stress
     const matSelect = document.getElementById('material_preset').value;
     let E = 110e9; let alpha = 17e-6; let nu = 0.33; let rho_mat = 8960; // Copper defaults
@@ -182,12 +192,40 @@ function calculateSizing() {
     const At = (mdot * cstar) / Pc; // m^2
     const Dt = Math.sqrt((4 * At) / Math.PI); // m
 
+    // 2.5 Injector Sizing & Constraints
+    const dP = Pf - Pc;
+    let A_inj = 0;
+    let D_inj = 0;
+    if (dP > 0) {
+        const rho_f = 800; // kg/m3 for JP8
+        const rho_o = 1400; // kg/m3 for HTP
+        const Cd = 0.7; // Discharge coefficient
+        const A_inj_f = mdot_f / (Cd * Math.sqrt(2 * rho_f * dP));
+        const A_inj_o = mdot_o / (Cd * Math.sqrt(2 * rho_o * dP));
+        A_inj = (A_inj_f + A_inj_o); // in m^2
+        
+        if (custom_inj_D) {
+            D_inj = custom_inj_D;
+        } else {
+            const A_face = A_inj / inj_porosity;
+            D_inj = Math.sqrt((4 * A_face) / Math.PI);
+        }
+    }
+
     // 3. Chamber Area & Length (with constraint checking)
     let Ac = CR * At;
     let Dc = Math.sqrt((4 * Ac) / Math.PI);
     let Lc = Lstar / CR; 
     
     let constraint_msg = [];
+
+    if (D_inj > 0 && Dc < D_inj) {
+        Dc = D_inj;
+        Ac = Math.PI * Math.pow(Dc, 2) / 4;
+        CR = Ac / At; // Reverse calculate actual CR
+        Lc = Lstar / CR; // Lc might change due to new CR
+        constraint_msg.push(`Chamber diameter was increased to match the required Injector Face Diameter. CR updated to ${CR.toFixed(2)}.`);
+    }
 
     if (max_D && Dc > max_D) {
         Dc = max_D;
@@ -226,17 +264,9 @@ function calculateSizing() {
     const Ae = eps * At;
     const De = Math.sqrt((4 * Ae) / Math.PI);
 
-    // 5. Injector Sizing
-    const dP = Pf - Pc;
-    let A_inj = 0;
-    if (dP > 0) {
-        const rho_f = 800; // kg/m3 for JP8
-        const rho_o = 1400; // kg/m3 for HTP
-        const Cd = 0.7; // Discharge coefficient
-        const A_inj_f = mdot_f / (Cd * Math.sqrt(2 * rho_f * dP));
-        const A_inj_o = mdot_o / (Cd * Math.sqrt(2 * rho_o * dP));
-        A_inj = (A_inj_f + A_inj_o) * 1e6; // in mm^2
-    }
+    // Injector Sizing already handled in 2.5
+    // Just format A_inj in mm^2 for legacy reference
+    A_inj = A_inj * 1e6; // in mm^2
 
     // 6. Automated Regenerative Cooling (Using HTP mdot_o)
     const rho_cool = 1400; 
@@ -247,17 +277,16 @@ function calculateSizing() {
     let t_w_mm = t_w * 1000;
     
     // b) Number of Channels
-    // Assume we want a minimum channel width of ~1.5mm at the throat to prevent clogging and high pressure drop
-    const w_t_target_mm = 1.5;
+    let w_t_target_mm = custom_wt ? custom_wt : 1.5;
     const Dt_mm = Dt * 1000;
-    const N_chan = Math.floor( (Math.PI * Dt_mm) / (w_t_target_mm + t_rib_mm) );
+    const N_chan = Math.max(1, Math.floor( (Math.PI * Dt_mm) / (w_t_target_mm + t_rib_mm) ));
     
     // c) Channel Dimensions
     const w_t_mm = ((Math.PI * Dt_mm) / N_chan) - t_rib_mm;
     const w_c_mm = ((Math.PI * Dc * 1000) / N_chan) - t_rib_mm;
     
-    // Set constant channel height based on 1.5 aspect ratio at the throat
-    const h_mm = 1.5 * w_t_mm;
+    // Set constant channel height based on 1.5 aspect ratio at the throat (if not user-defined)
+    const h_mm = custom_h ? custom_h : (1.5 * w_t_mm);
     
     // d) Coolant Velocities
     const A_chan_t_m2 = (w_t_mm / 1000) * (h_mm / 1000);
@@ -336,6 +365,7 @@ function calculateSizing() {
     if (document.getElementById('res-actual-cr')) document.getElementById('res-actual-cr').textContent = CR.toFixed(2);
     if (document.getElementById('res-actual-lstar')) document.getElementById('res-actual-lstar').textContent = Lstar.toFixed(2) + ' m';
     if (document.getElementById('res-ainj')) document.getElementById('res-ainj').textContent = typeof A_inj !== 'undefined' ? (A_inj > 0 ? A_inj.toFixed(1) + ' mm²' : 'Error') : '--';
+    if (document.getElementById('res-dinj')) document.getElementById('res-dinj').textContent = (D_inj * 100).toFixed(2) + ' cm';
     
     document.getElementById('res-tw').textContent = t_w_mm.toFixed(2) + ' mm';
     document.getElementById('res-sig-p').textContent = (opt_sig_p / 1e6).toFixed(1) + ' MPa';
@@ -358,6 +388,15 @@ function calculateSizing() {
     document.getElementById('res-q').textContent = (opt_q / 1e6).toFixed(2) + ' MW/m²';
     document.getElementById('res-twg').textContent = Twg.toFixed(0) + ' K';
     document.getElementById('res-twc').textContent = Twc.toFixed(0) + ' K';
+    
+    // CHF Alert
+    const chfAlert = document.getElementById('chf-alert');
+    if (opt_q > user_chf_limit) {
+        chfAlert.classList.remove('hidden');
+        document.getElementById('chf-msg').innerHTML = `The heat flux at the throat (${(opt_q/1e6).toFixed(2)} MW/m²) exceeds the defined CHF limit of ${(user_chf_limit/1e6).toFixed(2)} MW/m²!`;
+    } else {
+        chfAlert.classList.add('hidden');
+    }
     
     // Alerts
     const limit_Twg = (k_w > 100) ? 900 : 1200; // Copper safe limit vs Inconel
@@ -524,10 +563,11 @@ function drawCoolingSVG(wc, wt, h, t_rib, t_w) {
         
         // Title text
         const titleText = document.createElementNS("http://www.w3.org/2000/svg", "text");
-        titleText.setAttribute("x", (s_w + s_trib*2)/2);
-        titleText.setAttribute("y", "-10");
-        titleText.setAttribute("fill", "var(--text-primary)");
-        titleText.setAttribute("text-anchor", "middle");
+        titleText.setAttribute("x", "0");
+        titleText.setAttribute("y", "-15");
+        titleText.setAttribute("fill", "var(--text-secondary)");
+        titleText.setAttribute("font-family", "Outfit");
+        titleText.setAttribute("font-size", "12");
         titleText.textContent = title;
         g.appendChild(titleText);
         
