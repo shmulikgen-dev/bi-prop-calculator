@@ -136,12 +136,14 @@ function calculateSizing() {
     
     const max_D_input = document.getElementById('max_D').value;
     const max_L_input = document.getElementById('max_L').value;
+    const min_L_input = document.getElementById('min_L').value;
     const max_D = max_D_input ? parseFloat(max_D_input) / 100 : null; // cm to m
     const max_L = max_L_input ? parseFloat(max_L_input) / 100 : null; // cm to m
+    const min_L = min_L_input ? parseFloat(min_L_input) / 100 : 0.01; // cm to m
 
     const Pf_bar = parseFloat(document.getElementById('size_Pf').value);
     const allow_stress_MPa = parseFloat(document.getElementById('allow_stress').value);
-    const t_rib_mm = parseFloat(document.getElementById('rib_thick').value);
+    let t_rib_mm = parseFloat(document.getElementById('rib_thick').value);
     const k_w = parseFloat(document.getElementById('kw').value);
     const Tc = parseFloat(document.getElementById('Tc').value);
     
@@ -219,11 +221,23 @@ function calculateSizing() {
     
     let constraint_msg = [];
 
+    if (min_L && Lc < min_L) {
+        Lc = min_L;
+        Lstar = Lc * CR; // Reverse calculate actual L*
+        constraint_msg.push(`Chamber length was increased to meet the Reaction Plane Dist. (${min_L_input} cm) requirement. Actual L* increased to ${Lstar.toFixed(2)} m.`);
+    }
+
     if (D_inj > 0 && Dc < D_inj) {
         Dc = D_inj;
         Ac = Math.PI * Math.pow(Dc, 2) / 4;
         CR = Ac / At; // Reverse calculate actual CR
         Lc = Lstar / CR; // Lc might change due to new CR
+        // Check min_L again in case the new Lc dropped below it
+        if (min_L && Lc < min_L) {
+            Lc = min_L;
+            Lstar = Lc * CR; // Final L* adjustment
+            constraint_msg.push(`Chamber length was also constrained by Reaction Plane Dist. Actual L* is now ${Lstar.toFixed(2)} m.`);
+        }
         constraint_msg.push(`Chamber diameter was increased to match the required Injector Face Diameter. CR updated to ${CR.toFixed(2)}.`);
     }
 
@@ -276,14 +290,46 @@ function calculateSizing() {
     let t_w = (Pc * Dc) / (2 * allow_stress_Pa); // in meters
     let t_w_mm = t_w * 1000;
     
-    // b) Number of Channels
+    // b) Number of Channels & Rib Structural Optimization
     let w_t_target_mm = custom_wt ? custom_wt : 1.5;
     const Dt_mm = Dt * 1000;
-    const N_chan = Math.max(1, Math.floor( (Math.PI * Dt_mm) / (w_t_target_mm + t_rib_mm) ));
+    const Dc_mm = Dc * 1000;
+    
+    // Iterative solver for minimum required rib thickness
+    let t_rib_mm_actual = t_rib_mm;
+    let N_chan = 1;
+    let iteration = 0;
+    const dP_MPa = Math.max(0, (Pf_bar - Pc_bar) / 10); // bar to MPa
+
+    while (iteration < 10) {
+        N_chan = Math.max(1, Math.floor( (Math.PI * Dt_mm) / (w_t_target_mm + t_rib_mm_actual) ));
+        let pitch_c = (Math.PI * Dc_mm) / N_chan;
+        let t_rib_structural = (dP_MPa * pitch_c) / allow_stress_MPa;
+        
+        // Add a small convergence tolerance
+        if (t_rib_structural > t_rib_mm_actual + 0.001) {
+            t_rib_mm_actual = t_rib_structural;
+            iteration++;
+        } else {
+            break; // Valid structurally
+        }
+    }
+    
+    if (t_rib_mm_actual > t_rib_mm + 0.01) {
+        constraint_msg.push(`Rib thickness was structurally increased from ${t_rib_mm.toFixed(2)} mm to ${t_rib_mm_actual.toFixed(2)} mm to withstand ${dP_MPa.toFixed(1)} MPa pressure diff.`);
+    }
+    
+    t_rib_mm = t_rib_mm_actual;
+    
+    // Re-check constraint alert box since we might have added a new message here
+    if (constraint_msg.length > 0) {
+        alertBox.classList.remove('hidden');
+        document.getElementById('constraint-msg').innerHTML = constraint_msg.join('<br>');
+    }
     
     // c) Channel Dimensions
     const w_t_mm = ((Math.PI * Dt_mm) / N_chan) - t_rib_mm;
-    const w_c_mm = ((Math.PI * Dc * 1000) / N_chan) - t_rib_mm;
+    const w_c_mm = ((Math.PI * Dc_mm) / N_chan) - t_rib_mm;
     
     // Set constant channel height based on 1.5 aspect ratio at the throat (if not user-defined)
     const h_mm = custom_h ? custom_h : (1.5 * w_t_mm);
@@ -364,8 +410,14 @@ function calculateSizing() {
     if (document.getElementById('res-eps')) document.getElementById('res-eps').textContent = eps.toFixed(1);
     if (document.getElementById('res-actual-cr')) document.getElementById('res-actual-cr').textContent = CR.toFixed(2);
     if (document.getElementById('res-actual-lstar')) document.getElementById('res-actual-lstar').textContent = Lstar.toFixed(2) + ' m';
-    if (document.getElementById('res-ainj')) document.getElementById('res-ainj').textContent = typeof A_inj !== 'undefined' ? (A_inj > 0 ? A_inj.toFixed(1) + ' mm²' : 'Error') : '--';
-    if (document.getElementById('res-dinj')) document.getElementById('res-dinj').textContent = (D_inj * 100).toFixed(2) + ' cm';
+    
+    document.querySelectorAll('.res-ainj').forEach(el => {
+        el.textContent = typeof A_inj !== 'undefined' ? (A_inj > 0 ? A_inj.toFixed(1) + ' mm²' : 'Invalid (Pf ≤ Pc)') : '--';
+        if (A_inj <= 0) el.style.color = 'var(--danger)';
+        else el.style.color = '';
+    });
+    
+    if (document.getElementById('res-dinj')) document.getElementById('res-dinj').textContent = (D_inj > 0 ? (D_inj * 100).toFixed(2) + ' cm' : '--');
     
     document.getElementById('res-tw').textContent = t_w_mm.toFixed(2) + ' mm';
     document.getElementById('res-sig-p').textContent = (opt_sig_p / 1e6).toFixed(1) + ' MPa';
@@ -440,20 +492,41 @@ function calculateSizing() {
     for (let test_cr = 2.0; test_cr <= 10.0; test_cr += 0.2) {
         const test_Dc = Math.sqrt((4 * test_cr * At) / Math.PI);
         const test_Lc = Lstar / test_cr;
+        const test_tw = opt_tw_m;
         
-        // Assume opt_tw scales roughly with D_c for hoop, but let's keep it simple
-        const test_tw = opt_tw_m; // Using the optimized tw for estimation
+        // 1. Converging Section (Assume 45 deg half-angle)
+        const L_conv = (test_Dc - Dt) / 2;
+        const S_conv = Math.sqrt(Math.pow((test_Dc - Dt)/2, 2) + Math.pow(L_conv, 2));
+        const SA_conv = Math.PI * ((test_Dc + Dt) / 2) * S_conv;
         
-        const M_cyl = rho_mat * Math.PI * test_Dc * test_Lc * test_tw;
+        // 2. Diverging Section (Assume 15 deg half-angle)
+        const half_angle_div = 15 * Math.PI / 180;
+        const L_div = (De - Dt) / (2 * Math.tan(half_angle_div));
+        const S_div = Math.sqrt(Math.pow((De - Dt)/2, 2) + Math.pow(L_div, 2));
+        const SA_div = Math.PI * ((De + Dt) / 2) * S_div;
         
-        // Cone Mass (approx 45 deg)
-        const M_conv = rho_mat * (Math.PI / 2) * (Math.pow(test_Dc, 2) - Math.pow(Dt, 2)) / Math.sin(Math.PI/4) * test_tw;
+        // 3. Cylinder Section
+        const SA_cyl = Math.PI * test_Dc * test_Lc;
         
-        // Injector Plate Mass
-        const t_inj = test_Dc * Math.sqrt((0.162 * Pc) / (allow_stress_MPa * 1e6));
-        const M_inj = rho_mat * Math.PI * Math.pow(test_Dc, 2) / 4 * t_inj;
+        const SA_inner = SA_cyl + SA_conv + SA_div;
+        const L_profile = test_Lc + S_conv + S_div;
         
-        const total_mass = M_cyl + M_conv + M_inj;
+        // 4. Inner Liner Mass
+        const M_inner = SA_inner * test_tw * rho_mat;
+        
+        // 5. Ribs Mass
+        // Recalculate approx number of channels for this CR
+        const test_N_chan = Math.max(1, Math.floor( (Math.PI * Dt * 1000) / ((custom_wt ? custom_wt : 1.5) + t_rib_mm) ));
+        const M_ribs = test_N_chan * (t_rib_mm / 1000) * (h_mm / 1000) * L_profile * rho_mat;
+        
+        // 6. Outer Jacket Mass
+        const t_jacket = (Pf * test_Dc) / (2 * allow_stress_MPa * 1e6);
+        const D_outer = test_Dc + 2 * (h_mm / 1000 + test_tw);
+        const SA_outer = SA_inner * (D_outer / test_Dc);
+        const M_jacket = SA_outer * t_jacket * rho_mat;
+        
+        // Total (excluding flanges/injector)
+        const total_mass = M_inner + M_ribs + M_jacket;
         
         cr_data.push(test_cr.toFixed(1));
         mass_data.push(total_mass.toFixed(2));
@@ -522,70 +595,140 @@ function drawCoolingSVG(wc, wt, h, t_rib, t_w) {
     const svg = document.getElementById('cooling-svg');
     svg.innerHTML = '';
     
-    // Two groups: left (Chamber), right (Throat)
-    const renderChannel = (xOffset, yOffset, w, title) => {
-        const scale = 15; // Visual scale factor (pixels per mm)
-        const s_w = w * scale;
-        const s_h = h * scale;
-        const s_trib = t_rib * scale;
-        const s_tw = t_w * scale;
+    // Two groups: top (Chamber), bottom (Throat)
+    const renderChannel = (centerY, w, title) => {
+        // Calculate a dynamic scale to ensure it fits in ~340px width
+        let scale = Math.min(30, 340 / (w + 2 * t_rib));
+        
+        let s_w = Math.max(w * scale, 80);
+        let s_h = Math.max(h * scale, 60);
+        let s_trib = Math.max(t_rib * scale, 40);
+        let s_tw = Math.max(t_w * scale, 25);
+        
+        let totalW = s_trib*2 + s_w;
+        
+        // Final safety check to prevent any overflow due to Math.max bounds
+        if (totalW > 380) {
+            const shrink = 380 / totalW;
+            s_w *= shrink;
+            s_trib *= shrink;
+            s_h *= shrink;
+            s_tw *= shrink;
+            totalW = 380;
+        }
+        
+        const xOffset = (400 - totalW) / 2;
+        const yOffset = centerY - (s_h + s_tw + 30) / 2;
         
         const g = document.createElementNS("http://www.w3.org/2000/svg", "g");
         g.setAttribute("transform", `translate(${xOffset}, ${yOffset})`);
         
-        // Inner Wall (Hot side)
-        const wall = document.createElementNS("http://www.w3.org/2000/svg", "rect");
-        wall.setAttribute("x", "0");
-        wall.setAttribute("y", "0");
-        wall.setAttribute("width", s_w + s_trib*2);
-        wall.setAttribute("height", s_tw);
-        wall.setAttribute("fill", "var(--danger)");
-        wall.setAttribute("opacity", "0.7");
-        g.appendChild(wall);
-        
-        // Outer body / ribs
-        const body = document.createElementNS("http://www.w3.org/2000/svg", "path");
-        // Drawing U-shape for ribs
-        const d = `M 0,${s_tw} L ${s_trib},${s_tw} L ${s_trib},${s_tw+s_h} L ${s_trib+s_w},${s_tw+s_h} L ${s_trib+s_w},${s_tw} L ${s_trib*2+s_w},${s_tw} L ${s_trib*2+s_w},${s_tw+s_h+10} L 0,${s_tw+s_h+10} Z`;
-        body.setAttribute("d", d);
-        body.setAttribute("fill", "var(--text-secondary)");
-        g.appendChild(body);
-        
-        // Coolant Channel Area (Blue)
-        const chan = document.createElementNS("http://www.w3.org/2000/svg", "rect");
-        chan.setAttribute("x", s_trib);
-        chan.setAttribute("y", s_tw);
-        chan.setAttribute("width", s_w);
-        chan.setAttribute("height", s_h);
-        chan.setAttribute("fill", "var(--accent-color)");
-        chan.setAttribute("opacity", "0.5");
-        g.appendChild(chan);
-        
-        // Title text
+        // 1. Hot Gas Area (bottom)
+        const hotGas = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+        hotGas.setAttribute("x", "0");
+        hotGas.setAttribute("y", s_tw + s_h + 10);
+        hotGas.setAttribute("width", s_trib*2 + s_w);
+        hotGas.setAttribute("height", 20);
+        hotGas.setAttribute("fill", "rgba(239, 68, 68, 0.15)");
+        g.appendChild(hotGas);
+
+        const hotGasText = document.createElementNS("http://www.w3.org/2000/svg", "text");
+        hotGasText.setAttribute("x", (s_trib*2 + s_w)/2);
+        hotGasText.setAttribute("y", s_tw + s_h + 24);
+        hotGasText.setAttribute("fill", "var(--danger)");
+        hotGasText.setAttribute("font-size", "10");
+        hotGasText.setAttribute("font-weight", "bold");
+        hotGasText.setAttribute("text-anchor", "middle");
+        hotGasText.textContent = "HOT GAS FLOW";
+        g.appendChild(hotGasText);
+
+        // 2. Outer Jacket (top)
+        const jacket = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+        jacket.setAttribute("x", "0");
+        jacket.setAttribute("y", "-10");
+        jacket.setAttribute("width", s_trib*2 + s_w);
+        jacket.setAttribute("height", 10);
+        jacket.setAttribute("fill", "#475569");
+        g.appendChild(jacket);
+
+        // 3. Metal Liner (Inner wall + Ribs)
+        const liner = document.createElementNS("http://www.w3.org/2000/svg", "path");
+        const d = `M0,${s_tw+s_h} L${s_trib*2+s_w},${s_tw+s_h} L${s_trib*2+s_w},${s_h} L${s_trib+s_w},${s_h} L${s_trib+s_w},0 L${s_trib},0 L${s_trib},${s_h} L0,${s_h} Z`;
+        liner.setAttribute("d", d);
+        liner.setAttribute("fill", "#94a3b8");
+        g.appendChild(liner);
+
+        // 4. Coolant Fluid
+        const coolant = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+        coolant.setAttribute("x", s_trib);
+        coolant.setAttribute("y", "0");
+        coolant.setAttribute("width", s_w);
+        coolant.setAttribute("height", s_h);
+        coolant.setAttribute("fill", "rgba(56, 189, 248, 0.4)");
+        g.appendChild(coolant);
+
+        // Helper to draw dimension lines
+        const addDim = (x1, y1, x2, y2, label, labelX, labelY, align) => {
+            const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+            line.setAttribute("x1", x1); line.setAttribute("y1", y1);
+            line.setAttribute("x2", x2); line.setAttribute("y2", y2);
+            line.setAttribute("stroke", "white"); line.setAttribute("stroke-width", "1.5");
+            g.appendChild(line);
+            
+            // Ticks
+            const tickSize = 4;
+            if (x1 !== x2) {
+                const t1 = document.createElementNS("http://www.w3.org/2000/svg", "line");
+                t1.setAttribute("x1", x1); t1.setAttribute("y1", y1-tickSize); t1.setAttribute("x2", x1); t1.setAttribute("y2", y1+tickSize);
+                t1.setAttribute("stroke", "white"); t1.setAttribute("stroke-width", "1.5");
+                g.appendChild(t1);
+                
+                const t2 = document.createElementNS("http://www.w3.org/2000/svg", "line");
+                t2.setAttribute("x1", x2); t2.setAttribute("y1", y2-tickSize); t2.setAttribute("x2", x2); t2.setAttribute("y2", y2+tickSize);
+                t2.setAttribute("stroke", "white"); t2.setAttribute("stroke-width", "1.5");
+                g.appendChild(t2);
+            } else {
+                const t1 = document.createElementNS("http://www.w3.org/2000/svg", "line");
+                t1.setAttribute("x1", x1-tickSize); t1.setAttribute("y1", y1); t1.setAttribute("x2", x1+tickSize); t1.setAttribute("y2", y1);
+                t1.setAttribute("stroke", "white"); t1.setAttribute("stroke-width", "1.5");
+                g.appendChild(t1);
+                
+                const t2 = document.createElementNS("http://www.w3.org/2000/svg", "line");
+                t2.setAttribute("x1", x2-tickSize); t2.setAttribute("y1", y2); t2.setAttribute("x2", x2+tickSize); t2.setAttribute("y2", y2);
+                t2.setAttribute("stroke", "white"); t2.setAttribute("stroke-width", "1.5");
+                g.appendChild(t2);
+            }
+
+            const txt = document.createElementNS("http://www.w3.org/2000/svg", "text");
+            txt.setAttribute("x", labelX); txt.setAttribute("y", labelY);
+            txt.setAttribute("fill", "white"); txt.setAttribute("font-size", "12");
+            txt.setAttribute("text-anchor", align);
+            txt.textContent = label;
+            g.appendChild(txt);
+        };
+
+        // Dimensions
+        addDim(s_trib, s_h/2, s_trib+s_w, s_h/2, "W: " + w.toFixed(1), s_trib + s_w/2, s_h/2 - 5, "middle");
+        addDim(0, s_h/2, s_trib, s_h/2, "Rib: " + t_rib.toFixed(1), s_trib/2, s_h/2 - 5, "middle");
+        addDim(s_trib+s_w+10, 0, s_trib+s_w+10, s_h, "H: " + h.toFixed(1), s_trib+s_w+15, s_h/2 + 4, "start");
+        addDim(s_trib*1.5 + s_w, s_h, s_trib*1.5 + s_w, s_h+s_tw, "tw: " + t_w.toFixed(2), s_trib*1.5 + s_w + 5, s_h + s_tw/2 + 4, "start");
+
+        // Title
         const titleText = document.createElementNS("http://www.w3.org/2000/svg", "text");
-        titleText.setAttribute("x", "0");
-        titleText.setAttribute("y", "-15");
+        titleText.setAttribute("x", (s_trib*2 + s_w)/2);
+        titleText.setAttribute("y", "-25");
         titleText.setAttribute("fill", "var(--text-secondary)");
         titleText.setAttribute("font-family", "Outfit");
-        titleText.setAttribute("font-size", "12");
+        titleText.setAttribute("font-size", "16");
+        titleText.setAttribute("text-anchor", "middle");
         titleText.textContent = title;
         g.appendChild(titleText);
-        
-        // Dimension Text W
-        const wText = document.createElementNS("http://www.w3.org/2000/svg", "text");
-        wText.setAttribute("x", s_trib + s_w/2);
-        wText.setAttribute("y", s_tw + s_h/2);
-        wText.setAttribute("fill", "white");
-        wText.setAttribute("font-size", "12");
-        wText.setAttribute("text-anchor", "middle");
-        wText.textContent = w.toFixed(1) + "mm";
-        g.appendChild(wText);
         
         return g;
     };
     
-    svg.appendChild(renderChannel(80, 50, wc, "Chamber Section"));
-    svg.appendChild(renderChannel(320, 50, wt, "Throat Section"));
+    svg.appendChild(renderChannel(110, wc, "Chamber Section"));
+    svg.appendChild(renderChannel(330, wt, "Throat Section"));
 }
 
 function drawEngineSVG(Dc, Dt, De, Lc) {

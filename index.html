@@ -233,6 +233,14 @@
                                 <input type="number" id="max_L" step="any" placeholder="None">
                             </div>
                             <div class="input-field">
+                                <label for="min_L">Reaction Plane Dist. (\(L_{min}\)) [cm]</label>
+                                <input type="number" id="min_L" value="1.0" step="0.1" required>
+                                <div style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.35rem; line-height: 1.3;">
+                                    <strong>Default: 1.0 cm</strong><br>
+                                    Minimum physical distance required for propellant impingement and mixing.
+                                </div>
+                            </div>
+                            <div class="input-field">
                                 <label for="inj_porosity">Injector Porosity [%]</label>
                                 <input type="number" id="inj_porosity" value="10" step="0.5">
                                 <div style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.35rem; line-height: 1.3;">
@@ -276,8 +284,11 @@
                                 </div>
                             </div>
                             <div class="input-field">
-                                <label for="rib_thick">Rib Thickness [mm]</label>
+                                <label for="rib_thick">Min Rib Thickness (Mfg) [mm]</label>
                                 <input type="number" id="rib_thick" value="1.0" step="0.1" required>
+                                <div style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.35rem; line-height: 1.3;">
+                                    Minimum manufacturing thickness. Will automatically increase if structural limits require it.
+                                </div>
                             </div>
                             <div class="input-field">
                                 <label for="Tc">Combustion Temp (\(T_c\)) [K]</label>
@@ -303,6 +314,50 @@
                                 <label for="user_h">Channel Height (Length) [mm]</label>
                                 <input type="number" id="user_h" step="0.1" placeholder="Auto">
                             </div>
+                        </div>
+
+                        <!-- Cooling Channels Diagram -->
+                        <div style="margin-top: 1rem; background: rgba(0,0,0,0.2); border-radius: 0.5rem; padding: 1rem; text-align: center;">
+                            <h4 style="margin-bottom: 0.5rem; font-size: 0.9rem; color: var(--text-secondary);">Cooling Channel Geometry Reference</h4>
+                            <svg width="300" height="130" viewBox="0 0 300 130" style="max-width: 100%;">
+                                <!-- Hot Gas Area -->
+                                <rect x="10" y="90" width="280" height="30" fill="rgba(239, 68, 68, 0.15)"/>
+                                <text x="150" y="110" fill="var(--danger)" font-size="10" font-weight="bold" text-anchor="middle">HOT GAS FLOW</text>
+                                
+                                <!-- Outer Jacket (Closure) -->
+                                <rect x="10" y="10" width="280" height="10" fill="#475569"/>
+                                
+                                <!-- Solid Metal (Inner Liner + Ribs) -->
+                                <path d="M10,90 L290,90 L290,75 L230,75 L230,20 L190,20 L190,75 L110,75 L110,20 L70,20 L70,75 L10,75 Z" fill="#94a3b8"/>
+                                
+                                <!-- Coolant Fluid -->
+                                <rect x="110" y="20" width="80" height="55" fill="rgba(56, 189, 248, 0.4)"/>
+                                <rect x="10" y="20" width="60" height="55" fill="rgba(56, 189, 248, 0.4)"/>
+                                <rect x="230" y="20" width="60" height="55" fill="rgba(56, 189, 248, 0.4)"/>
+                                
+                                <!-- Dimension: Channel Width -->
+                                <line x1="110" y1="47.5" x2="190" y2="47.5" stroke="white" stroke-width="1.5"/>
+                                <line x1="110" y1="43.5" x2="110" y2="51.5" stroke="white" stroke-width="1.5"/>
+                                <line x1="190" y1="43.5" x2="190" y2="51.5" stroke="white" stroke-width="1.5"/>
+                                <text x="150" y="42" fill="white" font-size="12" text-anchor="middle">Width</text>
+                                
+                                <!-- Dimension: Rib Thickness -->
+                                <line x1="70" y1="47.5" x2="110" y2="47.5" stroke="white" stroke-width="1.5"/>
+                                <line x1="70" y1="43.5" x2="70" y2="51.5" stroke="white" stroke-width="1.5"/>
+                                <text x="90" y="42" fill="white" font-size="12" text-anchor="middle">Rib</text>
+                                
+                                <!-- Dimension: Channel Height -->
+                                <line x1="200" y1="20" x2="200" y2="75" stroke="white" stroke-width="1.5"/>
+                                <line x1="196" y1="20" x2="204" y2="20" stroke="white" stroke-width="1.5"/>
+                                <line x1="196" y1="75" x2="204" y2="75" stroke="white" stroke-width="1.5"/>
+                                <text x="208" y="52" fill="white" font-size="12" text-anchor="start">Height</text>
+                                
+                                <!-- Dimension: Inner Wall -->
+                                <line x1="50" y1="75" x2="50" y2="90" stroke="white" stroke-width="1.5"/>
+                                <line x1="46" y1="75" x2="54" y2="75" stroke="white" stroke-width="1.5"/>
+                                <line x1="46" y1="90" x2="54" y2="90" stroke="white" stroke-width="1.5"/>
+                                <text x="60" y="86" fill="white" font-size="11" text-anchor="start">Inner Wall (tw)</text>
+                            </svg>
                         </div>
 
                         <button type="submit" class="btn-primary">Generate Design</button>
@@ -351,7 +406,7 @@
                         </div>
                         <div class="result-card">
                             <div class="result-label">Injector Area (\(A_{inj}\))</div>
-                            <div class="result-value" id="res-ainj">-- mm²</div>
+                            <div class="result-value res-ainj" id="res-ainj-main">-- mm²</div>
                             <div class="result-sub" id="res-ainj-split"></div>
                         </div>
                         <div class="result-card highlight">
@@ -392,7 +447,7 @@
                         </div>
                         <div class="result-card">
                             <div class="result-label">Total Injector Area</div>
-                            <div class="result-value" id="res-ainj">-- mm²</div>
+                            <div class="result-value res-ainj">-- mm²</div>
                         </div>
                     </div>
                     
@@ -507,6 +562,9 @@
                             <div class="result-card highlight">
                                 <div class="result-label">Minimum Engine Mass</div>
                                 <div class="result-value" id="res-opt-mass" style="color: #4ade80;">-- kg</div>
+                                <div style="font-size: 0.7rem; color: var(--text-secondary); margin-top: 0.25rem;">
+                                    *Includes cooling jacket & nozzle.<br>Excludes injector head & flanges.
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -514,8 +572,8 @@
                     <!-- Cooling Cross Section SVG Canvas -->
                     <div style="background: rgba(0,0,0,0.3); border-radius: 0.5rem; padding: 1rem; text-align: center; overflow: hidden; margin-top: 1rem;">
                         <h4 style="color: var(--text-secondary); margin-bottom: 0.5rem; font-weight: normal; font-size: 0.9rem;">Cooling Channel Cross-Section (Chamber vs Throat)</h4>
-                        <svg id="cooling-svg" width="100%" height="200" viewBox="0 0 500 200" style="max-width: 100%;">
-                            <text x="250" y="100" fill="var(--text-secondary)" text-anchor="middle" font-family="Outfit">Waiting for Design Generation</text>
+                        <svg id="cooling-svg" width="100%" height="450" viewBox="0 0 400 450" style="max-width: 100%;">
+                            <text x="200" y="225" fill="var(--text-secondary)" text-anchor="middle" font-family="Outfit">Waiting for Design Generation</text>
                         </svg>
                     </div>
                 </div>
@@ -555,6 +613,12 @@
                     </div>
 
                     <div class="theory-card">
+                        <h3>5b. Rib Tensile Stress (\(t_{rib\_min}\))</h3>
+                        <p class="formula">$$ t_{rib\_min} = \frac{\Delta P \cdot p_c}{\sigma_{allow}} $$</p>
+                        <p class="desc">Structural integrity check. The minimum rib thickness required to withstand the tensile force exerted by the coolant pressure differential (\(\Delta P\)) on the channel pitch (\(p_c\)). The rib thickness is automatically increased if this structural limit exceeds the manufacturing minimum.</p>
+                    </div>
+
+                    <div class="theory-card">
                         <h3>6. Hot Gas Heat Transfer (Bartz)</h3>
                         <p class="formula">$$ h_g \propto \frac{1}{D_t^{0.2}} \cdot \left(\frac{P_c}{c^*}\right)^{0.8} $$</p>
                         <p class="desc">The Bartz equation estimates the convective heat transfer coefficient (\(h_g\)) of the hot combustion gas. It is highest at the throat due to extreme velocity and mass flux.</p>
@@ -570,6 +634,12 @@
                         <h3>8. Steady-State Heat Flux (\(q\))</h3>
                         <p class="formula">$$ q = \frac{T_{c} - T_{co}}{\frac{1}{h_g} + \frac{t_w}{k_w} + \frac{1}{h_c}} $$</p>
                         <p class="desc">The 1D thermal resistance network. Balances the heat flowing from the gas (\(T_c\)), through the metal wall (\(k_w/t_w\)), and into the liquid coolant (\(T_{co}\)).</p>
+                    </div>
+
+                    <div class="theory-card">
+                        <h3>9. Engine Mass Optimization (\(M_{tot}\))</h3>
+                        <p class="formula">$$ M_{tot} = M_{liner} + M_{jacket} + M_{ribs} $$</p>
+                        <p class="desc">Calculates structural mass of the combustion chamber, nozzle, jacket, and ribs based on geometry and density (\(\rho_{mat}\)). Excludes the injector, flanges, and valves. Used to find the optimal Contraction Ratio (CR) that minimizes total mass.</p>
                     </div>
                 </div>
             </div>
