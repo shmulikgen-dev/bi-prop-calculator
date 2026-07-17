@@ -134,6 +134,12 @@ function calculateSizing() {
     let Lstar = parseFloat(document.getElementById('size_Lstar').value);
     let CR = parseFloat(document.getElementById('size_CR').value);
     
+    // Defensive Check against Division by Zero (DoS Prevention)
+    if (F <= 0 || Pc_bar <= 0 || OF <= 0 || CR <= 0) {
+        alert("Security / Stability Warning: Critical parameters (Thrust, Pc, O/F, CR) must be strictly greater than 0.");
+        return;
+    }
+    
     const max_D_input = document.getElementById('max_D').value;
     const max_L_input = document.getElementById('max_L').value;
     const min_L_input = document.getElementById('min_L').value;
@@ -224,7 +230,7 @@ function calculateSizing() {
     if (min_L && Lc < min_L) {
         Lc = min_L;
         Lstar = Lc * CR; // Reverse calculate actual L*
-        constraint_msg.push(`Chamber length was increased to meet the Reaction Plane Dist. (${min_L_input} cm) requirement. Actual L* increased to ${Lstar.toFixed(2)} m.`);
+        constraint_msg.push(`Chamber length was increased to meet the Reaction Plane Dist. (${(min_L * 100).toFixed(1)} cm) requirement. Actual L* increased to ${Lstar.toFixed(2)} m.`);
     }
 
     if (D_inj > 0 && Dc < D_inj) {
